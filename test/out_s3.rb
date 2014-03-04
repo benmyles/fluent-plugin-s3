@@ -130,6 +130,34 @@ class S3OutputTest < Test::Unit::TestCase
     d.run
   end
 
+  def test_format_with_out_format_json
+    config = [CONFIG, 'out_format json'].join("\n")
+    d = create_driver(config)
+
+    time = Time.parse("2011-01-02 13:14:15 UTC").to_i
+    d.emit({"a"=>1}, time)
+    d.emit({"a"=>2}, time)
+
+    d.expect_format %[{"a":1}\n]
+    d.expect_format %[{"a":2}\n]
+
+    d.run
+  end
+
+  def test_format_with_out_format_csv
+    config = [CONFIG, 'out_format csv'].join("\n")
+    d = create_driver(config)
+
+    time = Time.parse("2011-01-02 13:14:15 UTC").to_i
+    d.emit({"a"=>1,"b"=>2}, time)
+    d.emit({"a"=>3,"b"=>4}, time)
+
+    d.expect_format %[1|2\n]
+    d.expect_format %[3|4\n]
+
+    d.run
+  end
+
   def test_format_with_format_json_included_tag
     config = [CONFIG, 'format_json true', 'include_tag_key true'].join("\n")
     d = create_driver(config)
@@ -140,6 +168,20 @@ class S3OutputTest < Test::Unit::TestCase
 
     d.expect_format %[{"a":1,"tag":"test"}\n]
     d.expect_format %[{"a":2,"tag":"test"}\n]
+
+    d.run
+  end
+
+  def test_format_with_out_format_csv_included_tag
+    config = [CONFIG, 'out_format csv', 'include_tag_key true'].join("\n")
+    d = create_driver(config)
+
+    time = Time.parse("2011-01-02 13:14:15 UTC").to_i
+    d.emit({"a"=>1,"b"=>2}, time)
+    d.emit({"a"=>3,"b"=>4}, time)
+
+    d.expect_format %[1|2|test\n]
+    d.expect_format %[3|4|test\n]
 
     d.run
   end
@@ -158,6 +200,20 @@ class S3OutputTest < Test::Unit::TestCase
     d.run
   end
 
+  def test_format_with_out_format_csv_included_time
+    config = [CONFIG, 'out_format csv', 'include_time_key true'].join("\n")
+    d = create_driver(config)
+
+    time = Time.parse("2011-01-02 13:14:15 UTC").to_i
+    d.emit({"a"=>1,"b"=>2}, time)
+    d.emit({"a"=>3,"b"=>4}, time)
+
+    d.expect_format %[1|2|2011-01-02T13:14:15Z\n]
+    d.expect_format %[3|4|2011-01-02T13:14:15Z\n]
+
+    d.run
+  end
+
   def test_format_with_format_json_included_tag_and_time
     config = [CONFIG, 'format_json true', 'include_tag_key true', 'include_time_key true'].join("\n")
     d = create_driver(config)
@@ -168,6 +224,20 @@ class S3OutputTest < Test::Unit::TestCase
 
     d.expect_format %[{"a":1,"tag":"test","time":"2011-01-02T13:14:15Z"}\n]
     d.expect_format %[{"a":2,"tag":"test","time":"2011-01-02T13:14:15Z"}\n]
+
+    d.run
+  end
+
+  def test_format_with_out_format_csv_included_tag_and_time
+    config = [CONFIG, 'out_format csv', 'include_tag_key true', 'include_time_key true'].join("\n")
+    d = create_driver(config)
+
+    time = Time.parse("2011-01-02 13:14:15 UTC").to_i
+    d.emit({"a"=>1,"b"=>2}, time)
+    d.emit({"a"=>3,"b"=>4}, time)
+
+    d.expect_format %[1|2|test|2011-01-02T13:14:15Z\n]
+    d.expect_format %[3|4|test|2011-01-02T13:14:15Z\n]
 
     d.run
   end

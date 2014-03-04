@@ -45,6 +45,7 @@ Simply use RubyGems:
 - %{time_slice}
 - %{index}
 - %{file_extension}
+- %{bsonid}
 
 to decide keys dynamically.
 
@@ -52,6 +53,7 @@ to decide keys dynamically.
 %{time_slice} is the time-slice in text that are formatted with *time_slice_format*.
 %{index} is the sequential number starts from 0, increments when multiple files are uploaded to S3 in the same time slice.
 %{file_extention} is always "gz" for now.
+%{bsonid} adds a unique bson id to the filename.
 
 The default format is "%{path}%{time_slice}_%{index}.%{file_extension}".
 
@@ -102,6 +104,11 @@ The {fluent-mixin-config-placeholders}[https://github.com/tagomoris/fluent-mixin
 
 [utc] Use UTC instead of local time.
 
+[out_format] Optional output format, 'json' or 'csv'.
+
+[csv_col_sep] Delimiter to separate CSV columns. Default is '|'.
+
+[csv_sort_cols] Sorts the CSV columns based on the input hash keys. Defaut is true.
 
 == Website, license, et. al.
 

@@ -16,6 +16,8 @@ class S3Output < Fluent::TimeSlicedOutput
     require 'time'
     require 'tempfile'
     require 'open3'
+    require 'csv'
+    require 'bson'
 
     @use_ssl = true
   end
@@ -35,6 +37,9 @@ class S3Output < Fluent::TimeSlicedOutput
   config_param :s3_endpoint, :string, :default => nil
   config_param :s3_object_key_format, :string, :default => "%{path}%{time_slice}_%{index}.%{file_extension}"
   config_param :store_as, :string, :default => "gzip"
+  config_param :out_format, :string, :default => nil
+  config_param :csv_col_sep, :string, :default => "|"
+  config_param :csv_sort_cols, :bool, :default => true
   config_param :auto_create_bucket, :bool, :default => true
   config_param :check_apikey_on_start, :bool, :default => true
   config_param :proxy_uri, :string, :default => nil
@@ -51,10 +56,29 @@ class S3Output < Fluent::TimeSlicedOutput
   def configure(conf)
     super
 
-    if format_json = conf['format_json']
-      @format_json = true
-    else
-      @format_json = false
+    @out_format = conf['out_format']
+    @out_format = 'json' if conf['format_json']
+
+    if csv_sort_cols = conf['csv_sort_cols']
+      if csv_sort_cols.empty?
+        @csv_sort_cols = true
+      else
+        @csv_sort_cols = Config.bool_value(csv_sort_cols)
+        if @csv_sort_cols.nil?
+          raise ConfigError, "'true' or 'false' is required for csv_sort_cols option on s3 output"
+        end
+      end
+    end
+
+    if csv_col_sep = conf['csv_col_sep']
+      if csv_col_sep.empty?
+        @csv_col_sep = '|'
+      else
+        @csv_col_sep = csv_col_sep
+        if @csv_col_sep.nil?
+          raise ConfigError, "string is required for csv_col_sep option on s3 output"
+        end
+      end
     end
 
     if use_ssl = conf['use_ssl']
@@ -114,8 +138,10 @@ class S3Output < Fluent::TimeSlicedOutput
   end
 
   def format(tag, time, record)
-    if @include_time_key || !@format_json
-      time_str = @timef.format(time)
+    time_str = if @include_time_key || @out_format.to_s.empty?
+      @timef.format(time)
+    else
+      nil
     end
 
     # copied from each mixin because current TimeSlicedOutput can't support mixins.
@@ -126,10 +152,11 @@ class S3Output < Fluent::TimeSlicedOutput
       record[@time_key] = time_str
     end
 
-    if @format_json
-      Yajl.dump(record) + "\n"
+    case @out_format.to_s
+    when 'csv' then
+      format_csv(tag, time, record)
     else
-      "#{time_str}\t#{tag}\t#{Yajl.dump(record)}\n"
+      format_default(tag, time, record, time_str)
     end
   end
 
@@ -142,7 +169,8 @@ class S3Output < Fluent::TimeSlicedOutput
         "path" => path,
         "time_slice" => chunk.key,
         "file_extension" => @ext,
-        "index" => i
+        "index" => i,
+        "bsonid" => BSON::ObjectId.new.to_s
       }
       s3path = @s3_object_key_format.gsub(%r(%{[^}]+})) { |expr|
         values_for_s3_object_key[expr[2...expr.size-1]]
@@ -177,6 +205,24 @@ class S3Output < Fluent::TimeSlicedOutput
   end
 
   private
+
+  def format_default(tag, time, record, time_str)
+    if @out_format == 'json'
+      Yajl.dump(record) + "\n"
+    else
+      "#{time_str}\t#{tag}\t#{Yajl.dump(record)}\n"
+    end
+  end
+
+  def format_csv(tag, time, record)
+    row = if @csv_sort_cols
+      record.keys.sort.map { |k| record[k] }
+    else
+      record.values
+    end
+
+    CSV.generate_line(row, col_sep: @csv_col_sep)
+  end
 
   def ensure_bucket
     if !@bucket.exists?
